@@ -13,7 +13,7 @@ short plain-text summary you can read out loud before your coffee kicks in.
 
 ```sh
 # latest release
-cargo install --git https://github.com/timvancann/gister --tag v0.2.0 --locked
+cargo install --git https://github.com/timvancann/gister --tag v0.2.1 --locked
 
 # or live on the edge
 cargo install --git https://github.com/timvancann/gister --locked
