@@ -12,6 +12,8 @@ use std::{
     fmt::Debug,
     path::{Path, PathBuf},
 };
+use url::Url;
+
 use termimad::crossterm::style::Stylize;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -19,26 +21,52 @@ use tokio::process::Command;
 use clap::Parser;
 use serde_json;
 
-const ME: &str = "Tim";
-
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
     dir: Option<PathBuf>,
-    #[arg(long, short)]
+    #[arg(long, short, help = "The git user to check")]
     user: Option<String>,
-    #[arg(long, short, help = "Since a given date")]
-    since: Option<chrono::NaiveDate>,
-    #[arg(long, short, conflicts_with = "since")]
+    #[arg(long, help = "Since a given date (yyyy-mm-dd)")]
+    date: Option<chrono::NaiveDate>,
+    #[arg(long, short, conflicts_with = "date", help = "Since days ago")]
     days: Option<u32>,
 
-    #[clap(long, short, help = "Send prompt to ollama")]
-    llm: bool,
-    #[clap(long, short, help = "Send prompt to claude code")]
+    #[command(flatten)]
+    ollama: OllamaArgs,
+
+    #[clap(long, short, help = "Enable claude code for summarization")]
     claude: bool,
+
+    #[clap(long, short, help = "Enable default summary")]
+    summary: bool,
 
     #[clap(long, short, help = "Pull all repos before checking")]
     pull: bool,
+}
+
+#[derive(clap::Args, Debug)]
+#[command(next_help_heading = "Ollama options")]
+struct OllamaArgs {
+    #[arg(long, short, help = "Enable ollama summarization")]
+    ollama: bool,
+
+    #[arg(
+        long = "ollama-host",
+        default_value = "http://localhost",
+        help = "Ollama host"
+    )]
+    host: String,
+
+    #[arg(long = "ollama-port", default_value_t = 11434, help = "Ollama port")]
+    port: u16,
+
+    #[arg(
+        long = "ollama-model",
+        default_value = "qwen3.8:27b-mlx",
+        help = "Model to use for summarizing"
+    )]
+    model: String,
 }
 
 #[tokio::main]
@@ -46,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let yesterday = chrono::Local::now().date_naive() - TimeDelta::days(1);
-    let since: NaiveDate = match (cli.since, cli.days) {
+    let since: NaiveDate = match (cli.date, cli.days) {
         (Some(since), _) => since,
         (_, Some(days)) => chrono::Local::now().date_naive() - TimeDelta::days(days as i64),
         _ => yesterday,
@@ -56,7 +84,12 @@ async fn main() -> anyhow::Result<()> {
         .and_utc()
         .timestamp();
 
-    let user = cli.user.unwrap_or(ME.to_string());
+    let user = match cli.user {
+        Some(user) => user,
+        None => git2::Config::open_default()
+            .and_then(|cfg| cfg.get_string("user.name"))
+            .context("no --user given and git user.name is not configured")?,
+    };
 
     let dir = cli.dir.unwrap_or(PathBuf::from("."));
     let mut repos: Vec<Repository> = Vec::default();
@@ -69,33 +102,38 @@ async fn main() -> anyhow::Result<()> {
         .flat_map(|r| process_repo(&r, &user, since_ts).unwrap())
         .collect();
 
-    if cli.llm {
-        let res = prompt(results).await?;
+    if cli.ollama.ollama {
+        let res = prompt(&results, cli.ollama).await?;
         termimad::print_text(&res.response);
-    } else if cli.claude {
-        termimad::print_text(&claude(results).await?);
-    } else {
+    }
+    if cli.claude {
+        termimad::print_text(&claude(&results).await?);
+    }
+    if cli.summary {
         summary(results);
     }
 
     Ok(())
 }
 
-async fn prompt(results: Vec<CommitInfo>) -> anyhow::Result<GenerationResponse> {
-    let ollama = Ollama::default();
-    let model = "qwen3.8:27b-mlx".to_string();
+async fn prompt(
+    results: &Vec<CommitInfo>,
+    cli_args: OllamaArgs,
+) -> anyhow::Result<GenerationResponse> {
+    let url = Url::parse(&format!("{}:{}", cli_args.host, cli_args.port)).unwrap();
+    let ollama = Ollama::from_url(url);
     let prompt = format!(
-        "Attached is a json containing commit information. The purpose is to get a small summary of the commits for the purpose of a scrum standup.
-        Emit any special character as unicode as this will be printed to a shell as part of a CLI.
-        The json is as follows: {}",
+        "Summarize these git commits for a scrum standup. Group by repo, one short line per theme of work. Format in markdown, special characers as unicode or ascii. Json: {}",
         serde_json::to_string(&results).expect("Serialization failed")
     );
 
-    let res = ollama.generate(GenerationRequest::new(model, prompt)).await;
+    let res = ollama
+        .generate(GenerationRequest::new(cli_args.model, prompt))
+        .await;
     Ok(res?)
 }
 
-async fn claude(results: Vec<CommitInfo>) -> anyhow::Result<String> {
+async fn claude(results: &Vec<CommitInfo>) -> anyhow::Result<String> {
     let json = serde_json::to_string(&results)?;
 
     let mut child = Command::new("claude")
