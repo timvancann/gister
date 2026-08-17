@@ -25,11 +25,20 @@ use serde_json;
 #[command(version, about, long_about = None)]
 struct Cli {
     dir: Option<PathBuf>,
-    #[arg(long, short, help = "The git user to check")]
+    #[arg(
+        long,
+        short,
+        help = "The git user to check, default is the system git user (git config user.name)"
+    )]
     user: Option<String>,
     #[arg(long, help = "Since a given date (yyyy-mm-dd)")]
     date: Option<chrono::NaiveDate>,
-    #[arg(long, short, conflicts_with = "date", help = "Since days ago")]
+    #[arg(
+        long,
+        short,
+        conflicts_with = "date",
+        help = "Since days ago, defaults to 1"
+    )]
     days: Option<u32>,
 
     #[command(flatten)]

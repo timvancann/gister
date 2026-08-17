@@ -15,9 +15,9 @@ cargo install --git ssh://git@github.com/timvancann/gister.git --locked
 ## Use
 
 ```sh
-gister ~/repos           # summarize yesterday's commits
-gister --days 3          # been away for a long weekend
-gister --pull ~/repos    # pull everything first, then summarize
+gister ~/repos -s        # summarize yesterday's commits
+gister --days 3 -s       # been away for a long weekend
+gister --pull ~/repos    # pull everything 
 gister ~/repos --claude  # let claude code summarize
 ```
 
