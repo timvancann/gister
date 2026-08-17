@@ -18,9 +18,9 @@ termimad = "0.35.1"
 tokio = { version = "1.53.1", features = ["full"] }
 url = "2.5.8"
 
-[net]
-git-fetch-with-cli = true
-
 [package.metadata.release]
 publish = false
 push = true
+pre-release-replacements = [
+  { file = "README.md", search = '--tag v\d+\.\d+\.\d+', replace = "--tag v{{version}}", exactly = 1 },
+]

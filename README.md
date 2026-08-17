@@ -1,5 +1,8 @@
 # gister
 
+[![Rust](https://img.shields.io/badge/rust-2024_edition-orange?logo=rust)](https://www.rust-lang.org)
+[![Version](https://img.shields.io/github/v/tag/timvancann/gister?label=version&sort=semver)](https://github.com/timvancann/gister/tags)
+
 Stand-up prep for people who don't remember what they did yesterday.
 
 `gister` crawls a directory full of git repos, collects your commits since
@@ -9,7 +12,11 @@ short plain-text summary you can read out loud before your coffee kicks in.
 ## Install
 
 ```sh
-cargo install --git ssh://git@github.com/timvancann/gister.git --locked
+# latest release
+cargo install --git https://github.com/timvancann/gister --tag v0.2.0 --locked
+
+# or live on the edge
+cargo install --git https://github.com/timvancann/gister --locked
 ```
 
 ## Use
