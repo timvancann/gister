@@ -101,8 +101,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let dir = cli.dir.unwrap_or(PathBuf::from("."));
-    let mut repos: Vec<Repository> = Vec::default();
-    discover(&dir, &mut repos)?;
+    let repos = discover(&dir)?;
     if cli.pull {
         pull(&repos);
     }
@@ -188,23 +187,29 @@ fn summary(results: Vec<CommitInfo>) {
     }
 }
 
-fn discover(root: &Path, repos: &mut Vec<Repository>) -> anyhow::Result<()> {
+fn discover(root: &Path) -> anyhow::Result<Vec<Repository>> {
+    if let Ok(repo) = Repository::open(root) {
+        return Ok(vec![repo]);
+    }
+    let mut repos = Vec::default();
     for entry in std::fs::read_dir(root)? {
         let path = entry?.path();
-        if path.is_dir() {
+        if path.is_dir() && !is_hidden(&path) {
             match Repository::open(&path)
                 .with_context(|| format!("Failed to open repository at {:?}", path))
             {
-                Ok(repo) => {
-                    repos.push(repo);
-                }
-                Err(_) => {
-                    discover(&path, repos)?;
-                }
+                Ok(repo) => repos.push(repo),
+                Err(_) => repos.extend(discover(&path)?),
             }
         }
     }
-    Ok(())
+    Ok(repos)
+}
+
+fn is_hidden(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|f| f.to_str())
+        .is_some_and(|f| f.starts_with("."))
 }
 
 #[derive(Serialize, Deserialize)]
