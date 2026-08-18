@@ -107,7 +107,13 @@ async fn main() -> anyhow::Result<()> {
     }
     let results: Vec<CommitInfo> = repos
         .into_iter()
-        .flat_map(|r| process_repo(&r, &user, since_ts).unwrap())
+        .flat_map(|r| match process_repo(&r, &user, since_ts) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Skipping {}: {e:#}", r.path().display());
+                Vec::default()
+            }
+        })
         .collect();
 
     if cli.ollama.ollama {
@@ -128,11 +134,11 @@ async fn prompt(
     results: &Vec<CommitInfo>,
     cli_args: OllamaArgs,
 ) -> anyhow::Result<GenerationResponse> {
-    let url = Url::parse(&format!("{}:{}", cli_args.host, cli_args.port)).unwrap();
+    let url = Url::parse(&format!("{}:{}", cli_args.host, cli_args.port))?;
     let ollama = Ollama::from_url(url);
     let prompt = format!(
         "Summarize these git commits for a scrum standup. Group by repo, one short line per theme of work. Format in markdown, special characers as unicode or ascii. Json: {}",
-        serde_json::to_string(&results).expect("Serialization failed")
+        serde_json::to_string(&results)?
     );
 
     let res = ollama
@@ -265,8 +271,8 @@ fn process_repo(repo: &Repository, user: &str, since_ts: i64) -> anyhow::Result<
         if commit_ts < since_ts {
             continue;
         }
-        let summary = commit.summary()?.unwrap();
-        let message = commit.message().unwrap_or("").to_string();
+        let summary = commit.summary()?.unwrap_or("");
+        let message = commit.message().unwrap_or("");
         let author = commit.author();
         if !author.name()?.contains(user) {
             continue;
