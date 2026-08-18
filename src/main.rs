@@ -47,9 +47,6 @@ struct Cli {
     #[clap(long, short, help = "Enable claude code for summarization")]
     claude: bool,
 
-    #[clap(long, short, help = "Enable default summary")]
-    summary: bool,
-
     #[clap(long, short, help = "Pull all repos before checking")]
     pull: bool,
 }
@@ -116,16 +113,15 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect();
 
-    if cli.ollama.ollama {
-        let res = prompt(&results, cli.ollama).await?;
-        termimad::print_text(&res.response);
-    }
-    if cli.claude {
-        termimad::print_text(&claude(&results).await?);
-    }
-    if cli.summary {
-        summary(results);
-    }
+    match (cli.ollama.ollama, cli.claude) {
+        (true, _) => {
+            termimad::print_text(&prompt(&results, cli.ollama).await?.response);
+        }
+        (false, true) => {
+            termimad::print_text(&claude(&results).await?);
+        }
+        _ => summary(results),
+    };
 
     Ok(())
 }
