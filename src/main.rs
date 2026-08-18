@@ -14,7 +14,7 @@ use std::{
 };
 use url::Url;
 
-use termimad::crossterm::style::Stylize;
+use termimad::crossterm::style::{StyledContent, Stylize};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
@@ -178,14 +178,25 @@ fn summary(results: Vec<CommitInfo>) {
     for (k, v) in summary {
         println!("{}", k.blue());
         for c in v {
-            let colour = match c.summary {
-                m if m.starts_with("feat") => m.green(),
-                m if m.starts_with("fix") => m.red(),
-                m if m.starts_with("chore") => m.yellow(),
-                _ => c.summary.white(),
-            };
-            println!("\t {}", colour)
+            println!("\t {}", colourize(&c.summary))
         }
+    }
+}
+
+/// Colour a commit line by its conventional-commit type.
+fn colourize(summary: &str) -> StyledContent<&str> {
+    let Some((prefix, _)) = summary.split_once(':') else {
+        return summary.white();
+    };
+    let kind = prefix.trim_end_matches('!');
+    let kind = kind.split_once('(').map_or(kind, |(kind, _)| kind);
+    match kind {
+        "feat" => summary.green(),
+        "fix" => summary.red(),
+        "docs" => summary.cyan(),
+        "refactor" | "perf" => summary.magenta(),
+        "chore" | "build" | "ci" | "test" => summary.yellow(),
+        _ => summary.white(),
     }
 }
 
